@@ -223,7 +223,7 @@ var fakeDNSServerSuccessful = fakeDNSServer{rh: func(_, _ string, q dnsmessage.M
 func TestLookupTorOnion(t *testing.T) {
 	defer dnsWaitGroup.Wait()
 	r := Resolver{PreferGo: true, Dial: fakeDNSServerSuccessful.DialContext}
-	addrs, err := r.LookupIPAddr(context.Background(), "foo.onion")
+	addrs, _, err := r.LookupIPAddr(context.Background(), "foo.onion")
 	if err != nil {
 		t.Fatalf("lookup = %v; want nil", err)
 	}
@@ -351,7 +351,7 @@ func TestUpdateResolvConf(t *testing.T) {
 			for j := 0; j < N; j++ {
 				go func(name string) {
 					defer wg.Done()
-					ips, err := r.LookupIPAddr(context.Background(), name)
+					ips, _, err := r.LookupIPAddr(context.Background(), name)
 					if err != nil {
 						t.Error(err)
 						return
@@ -557,7 +557,7 @@ func TestGoLookupIPWithResolverConfig(t *testing.T) {
 			t.Error(err)
 			continue
 		}
-		addrs, err := r.LookupIPAddr(context.Background(), tt.name)
+		addrs, _, err := r.LookupIPAddr(context.Background(), tt.name)
 		if err != nil {
 			if err, ok := err.(*DNSError); !ok || tt.error != nil && (err.Name != tt.error.(*DNSError).Name || err.Server != tt.error.(*DNSError).Server || err.IsTimeout != tt.error.(*DNSError).IsTimeout) {
 				t.Errorf("got %v; want %v", err, tt.error)
@@ -614,14 +614,14 @@ func TestGoLookupIPOrderFallbackToFile(t *testing.T) {
 	for _, order := range []hostLookupOrder{hostLookupFilesDNS, hostLookupDNSFiles} {
 		name := fmt.Sprintf("order %v", order)
 		// First ensure that we get an error when contacting a non-existent host.
-		_, _, err := r.goLookupIPCNAMEOrder(context.Background(), "ip", "notarealhost", order, nil)
+		_, _, _, err := r.goLookupIPCNAMEOrder(context.Background(), "ip", "notarealhost", order, nil)
 		if err == nil {
 			t.Errorf("%s: expected error while looking up name not in hosts file", name)
 			continue
 		}
 
 		// Now check that we get an address when the name appears in the hosts file.
-		addrs, _, err := r.goLookupIPCNAMEOrder(context.Background(), "ip", "thor", order, nil) // entry is in "testdata/hosts"
+		addrs, _, _, err := r.goLookupIPCNAMEOrder(context.Background(), "ip", "thor", order, nil) // entry is in "testdata/hosts"
 		if err != nil {
 			t.Errorf("%s: expected to successfully lookup host entry", name)
 			continue
@@ -683,7 +683,7 @@ func TestErrorForOriginalNameWhenSearching(t *testing.T) {
 	}
 	for _, tt := range cases {
 		r := Resolver{PreferGo: true, StrictErrors: tt.strictErrors, Dial: fake.DialContext}
-		_, err = r.LookupIPAddr(context.Background(), fqdn)
+		_, _, err = r.LookupIPAddr(context.Background(), fqdn)
 		if err == nil {
 			t.Fatal("expected an error")
 		}
@@ -743,7 +743,7 @@ func TestIgnoreLameReferrals(t *testing.T) {
 	}}
 	r := Resolver{PreferGo: true, Dial: fake.DialContext}
 
-	addrs, err := r.LookupIPAddr(context.Background(), "www.golang.org")
+	addrs, _, err := r.LookupIPAddr(context.Background(), "www.golang.org")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1016,7 +1016,7 @@ func TestRetryTimeout(t *testing.T) {
 	}}
 	r := &Resolver{PreferGo: true, Dial: fake.DialContext}
 
-	_, err = r.LookupTXT(context.Background(), "www.golang.org")
+	_, _, err = r.LookupTXT(context.Background(), "www.golang.org")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1064,7 +1064,7 @@ func testRotate(t *testing.T, rotate bool, nameservers, wantServers []string) {
 
 	// len(nameservers) + 1 to allow rotation to get back to start
 	for i := 0; i < len(nameservers)+1; i++ {
-		if _, err := r.LookupTXT(context.Background(), "www.golang.org"); err != nil {
+		if _, _, err := r.LookupTXT(context.Background(), "www.golang.org"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -1325,7 +1325,7 @@ func TestStrictErrorsLookupIP(t *testing.T) {
 
 		for _, strict := range []bool{true, false} {
 			r := Resolver{PreferGo: true, StrictErrors: strict, Dial: fake.DialContext}
-			ips, err := r.LookupIPAddr(context.Background(), name)
+			ips, _, err := r.LookupIPAddr(context.Background(), name)
 
 			var wantErr error
 			if strict {
@@ -1394,7 +1394,7 @@ func TestStrictErrorsLookupTXT(t *testing.T) {
 
 	for _, strict := range []bool{true, false} {
 		r := Resolver{StrictErrors: strict, Dial: fake.DialContext}
-		p, _, err := r.lookup(context.Background(), name, dnsmessage.TypeTXT, nil)
+		p, _, _, err := r.lookup(context.Background(), name, dnsmessage.TypeTXT, nil)
 		var wantErr error
 		var wantRRs int
 		if strict {
@@ -1436,7 +1436,7 @@ func TestDNSGoroutineRace(t *testing.T) {
 	// around after this test is done if we don't call dnsWaitGroup.Wait.
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Microsecond)
 	defer cancel()
-	_, err := r.LookupIPAddr(ctx, "where.are.they.now")
+	_, _, err := r.LookupIPAddr(ctx, "where.are.they.now")
 	if err == nil {
 		t.Fatal("fake DNS lookup unexpectedly succeeded")
 	}
@@ -1450,7 +1450,7 @@ func lookupWithFake(fake fakeDNSServer, name string, typ dnsmessage.Type) error 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	_, _, err := r.tryOneName(ctx, conf, name, typ)
+	_, _, _, err := r.tryOneName(ctx, conf, name, typ)
 	return err
 }
 
@@ -1649,7 +1649,7 @@ func TestTXTRecordTwoStrings(t *testing.T) {
 		},
 	}
 	r := Resolver{PreferGo: true, Dial: fake.DialContext}
-	txt, err := r.lookupTXT(context.Background(), "golang.org")
+	txt, _, err := r.lookupTXT(context.Background(), "golang.org")
 	if err != nil {
 		t.Fatal("LookupTXT failed:", err)
 	}
@@ -1730,7 +1730,7 @@ func TestSingleRequestLookup(t *testing.T) {
 	}
 	for _, name := range []string{"hostname.example.net", "slowipv4.example.net"} {
 		firstcalled = 0
-		_, err := r.LookupIPAddr(context.Background(), name)
+		_, _, err := r.LookupIPAddr(context.Background(), name)
 		if err != nil {
 			t.Error(err)
 		}
@@ -1802,7 +1802,7 @@ func TestPTRandNonPTR(t *testing.T) {
 		},
 	}
 	r := Resolver{PreferGo: true, Dial: fake.DialContext}
-	names, err := r.lookupAddr(context.Background(), "192.0.2.123")
+	names, _, err := r.lookupAddr(context.Background(), "192.0.2.123")
 	if err != nil {
 		t.Fatalf("LookupAddr: %v", err)
 	}
@@ -1966,11 +1966,11 @@ func TestCVE202133195(t *testing.T) {
 			name: "CNAME",
 			f: func(t *testing.T) {
 				expectedErr := &DNSError{Err: errMalformedDNSRecordsDetail, Name: "golang.org"}
-				_, err := r.LookupCNAME(context.Background(), "golang.org")
+				_, _, err := r.LookupCNAME(context.Background(), "golang.org")
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
-				_, err = LookupCNAME("golang.org")
+				_, _, err = LookupCNAME("golang.org")
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
@@ -1985,14 +1985,14 @@ func TestCVE202133195(t *testing.T) {
 					},
 				}
 				expectedErr := &DNSError{Err: errMalformedDNSRecordsDetail, Name: "golang.org"}
-				_, records, err := r.LookupSRV(context.Background(), "target", "tcp", "golang.org")
+				_, records, _, err := r.LookupSRV(context.Background(), "target", "tcp", "golang.org")
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
 				if !reflect.DeepEqual(records, expected) {
 					t.Error("Unexpected record set")
 				}
-				_, records, err = LookupSRV("target", "tcp", "golang.org")
+				_, records, _, err = LookupSRV("target", "tcp", "golang.org")
 				if err.Error() != expectedErr.Error() {
 					t.Errorf("unexpected error: %s", err)
 				}
@@ -2004,11 +2004,11 @@ func TestCVE202133195(t *testing.T) {
 		{
 			name: "SRV (bad header)",
 			f: func(t *testing.T) {
-				_, _, err := r.LookupSRV(context.Background(), "hdr", "tcp", "golang.org.")
+				_, _, _, err := r.LookupSRV(context.Background(), "hdr", "tcp", "golang.org.")
 				if expected := "lookup golang.org.: SRV header name is invalid"; err == nil || err.Error() != expected {
 					t.Errorf("Resolver.LookupSRV returned unexpected error, got %q, want %q", err, expected)
 				}
-				_, _, err = LookupSRV("hdr", "tcp", "golang.org.")
+				_, _, _, err = LookupSRV("hdr", "tcp", "golang.org.")
 				if expected := "lookup golang.org.: SRV header name is invalid"; err == nil || err.Error() != expected {
 					t.Errorf("LookupSRV returned unexpected error, got %q, want %q", err, expected)
 				}
@@ -2023,14 +2023,14 @@ func TestCVE202133195(t *testing.T) {
 					},
 				}
 				expectedErr := &DNSError{Err: errMalformedDNSRecordsDetail, Name: "golang.org"}
-				records, err := r.LookupMX(context.Background(), "golang.org")
+				records, _, err := r.LookupMX(context.Background(), "golang.org")
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
 				if !reflect.DeepEqual(records, expected) {
 					t.Error("Unexpected record set")
 				}
-				records, err = LookupMX("golang.org")
+				records, _, err = LookupMX("golang.org")
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
@@ -2048,14 +2048,14 @@ func TestCVE202133195(t *testing.T) {
 					},
 				}
 				expectedErr := &DNSError{Err: errMalformedDNSRecordsDetail, Name: "golang.org"}
-				records, err := r.LookupNS(context.Background(), "golang.org")
+				records, _, err := r.LookupNS(context.Background(), "golang.org")
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
 				if !reflect.DeepEqual(records, expected) {
 					t.Error("Unexpected record set")
 				}
-				records, err = LookupNS("golang.org")
+				records, _, err = LookupNS("golang.org")
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
@@ -2069,14 +2069,14 @@ func TestCVE202133195(t *testing.T) {
 			f: func(t *testing.T) {
 				expected := []string{"good.golang.org."}
 				expectedErr := &DNSError{Err: errMalformedDNSRecordsDetail, Name: "192.0.2.42"}
-				records, err := r.LookupAddr(context.Background(), "192.0.2.42")
+				records, _, err := r.LookupAddr(context.Background(), "192.0.2.42")
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
 				if !reflect.DeepEqual(records, expected) {
 					t.Error("Unexpected record set")
 				}
-				records, err = LookupAddr("192.0.2.42")
+				records, _, err = LookupAddr("192.0.2.42")
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
@@ -2120,7 +2120,7 @@ func TestNullMX(t *testing.T) {
 		},
 	}
 	r := Resolver{PreferGo: true, Dial: fake.DialContext}
-	rrset, err := r.LookupMX(context.Background(), "golang.org")
+	rrset, _, err := r.LookupMX(context.Background(), "golang.org")
 	if err != nil {
 		t.Fatalf("LookupMX: %v", err)
 	}
@@ -2161,7 +2161,7 @@ func TestRootNS(t *testing.T) {
 		},
 	}
 	r := Resolver{PreferGo: true, Dial: fake.DialContext}
-	rrset, err := r.LookupNS(context.Background(), ".")
+	rrset, _, err := r.LookupNS(context.Background(), ".")
 	if err != nil {
 		t.Fatalf("LookupNS: %v", err)
 	}
@@ -2217,7 +2217,7 @@ func TestGoLookupIPCNAMEOrderHostsAliasesDNSFilesMode(t *testing.T) {
 func testGoLookupIPCNAMEOrderHostsAliases(t *testing.T, mode hostLookupOrder, lookup, lookupRes string) {
 	ins := []string{lookup, absDomainName(lookup), strings.ToLower(lookup), strings.ToUpper(lookup)}
 	for _, in := range ins {
-		_, res, err := goResolver.goLookupIPCNAMEOrder(context.Background(), "ip", in, mode, nil)
+		_, res, _, err := goResolver.goLookupIPCNAMEOrder(context.Background(), "ip", in, mode, nil)
 		if err != nil {
 			t.Errorf("expected err == nil, but got error: %v", err)
 		}
@@ -2277,7 +2277,7 @@ func TestDNSPacketSize(t *testing.T) {
 	}
 
 	r := &Resolver{PreferGo: true, Dial: fake.DialContext}
-	if _, err := r.LookupIPAddr(context.Background(), "go.dev"); err != nil {
+	if _, _, err := r.LookupIPAddr(context.Background(), "go.dev"); err != nil {
 		t.Errorf("lookup failed: %v", err)
 	}
 }
@@ -2357,34 +2357,34 @@ func TestLongDNSNames(t *testing.T) {
 	query := func(t string, req string) error {
 		switch t {
 		case "CNAME":
-			_, err := r.LookupCNAME(context.Background(), req)
+			_, _, err := r.LookupCNAME(context.Background(), req)
 			return err
 		case "Host":
-			_, err := r.LookupHost(context.Background(), req)
+			_, _, err := r.LookupHost(context.Background(), req)
 			return err
 		case "IP":
-			_, err := r.LookupIP(context.Background(), "ip", req)
+			_, _, err := r.LookupIP(context.Background(), "ip", req)
 			return err
 		case "IPAddr":
-			_, err := r.LookupIPAddr(context.Background(), req)
+			_, _, err := r.LookupIPAddr(context.Background(), req)
 			return err
 		case "MX":
-			_, err := r.LookupMX(context.Background(), req)
+			_, _, err := r.LookupMX(context.Background(), req)
 			return err
 		case "NS":
-			_, err := r.LookupNS(context.Background(), req)
+			_, _, err := r.LookupNS(context.Background(), req)
 			return err
 		case "NetIP":
-			_, err := r.LookupNetIP(context.Background(), "ip", req)
+			_, _, err := r.LookupNetIP(context.Background(), "ip", req)
 			return err
 		case "SRV":
 			const service = "service"
 			const proto = "proto"
 			req = req[len(service)+len(proto)+4:]
-			_, _, err := r.LookupSRV(context.Background(), service, proto, req)
+			_, _, _, err := r.LookupSRV(context.Background(), service, proto, req)
 			return err
 		case "TXT":
-			_, err := r.LookupTXT(context.Background(), req)
+			_, _, err := r.LookupTXT(context.Background(), req)
 			return err
 		}
 		panic("unknown query method")
@@ -2460,12 +2460,12 @@ func TestDNSTrustAD(t *testing.T) {
 	}
 	defer conf.teardown()
 
+	// Non-loopback nameserver without "options trust-ad" is not trusted.
 	err = conf.writeAndUpdate([]string{"nameserver 127.0.0.1"})
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	if _, err := r.LookupIPAddr(context.Background(), "notrustad.go.dev"); err != nil {
+	if _, _, err := r.LookupIPAddr(context.Background(), "notrustad.go.dev"); err != nil {
 		t.Errorf("lookup failed: %v", err)
 	}
 
@@ -2474,7 +2474,7 @@ func TestDNSTrustAD(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := r.LookupIPAddr(context.Background(), "trustad.go.dev"); err != nil {
+	if _, _, err := r.LookupIPAddr(context.Background(), "trustad.go.dev"); err != nil {
 		t.Errorf("lookup failed: %v", err)
 	}
 }
@@ -2498,7 +2498,7 @@ func TestDNSConfigNoReload(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err = r.LookupHost(context.Background(), "go.dev"); err != nil {
+	if _, _, err = r.LookupHost(context.Background(), "go.dev"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -2507,7 +2507,7 @@ func TestDNSConfigNoReload(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err = r.LookupHost(context.Background(), "go.dev"); err != nil {
+	if _, _, err = r.LookupHost(context.Background(), "go.dev"); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -2557,28 +2557,28 @@ func TestLookupOrderFilesNoSuchHost(t *testing.T) {
 		{
 			name: "Host",
 			lookup: func(name string) error {
-				_, err = DefaultResolver.LookupHost(context.Background(), name)
+				_, _, err = DefaultResolver.LookupHost(context.Background(), name)
 				return err
 			},
 		},
 		{
 			name: "IP",
 			lookup: func(name string) error {
-				_, err = DefaultResolver.LookupIP(context.Background(), "ip", name)
+				_, _, err = DefaultResolver.LookupIP(context.Background(), "ip", name)
 				return err
 			},
 		},
 		{
 			name: "IPAddr",
 			lookup: func(name string) error {
-				_, err = DefaultResolver.LookupIPAddr(context.Background(), name)
+				_, _, err = DefaultResolver.LookupIPAddr(context.Background(), name)
 				return err
 			},
 		},
 		{
 			name: "NetIP",
 			lookup: func(name string) error {
-				_, err = DefaultResolver.LookupNetIP(context.Background(), "ip", name)
+				_, _, err = DefaultResolver.LookupNetIP(context.Background(), "ip", name)
 				return err
 			},
 		},
@@ -2597,6 +2597,123 @@ func TestLookupOrderFilesNoSuchHost(t *testing.T) {
 		errors.As(err, &dnsErr)
 		if dnsErr == nil || *dnsErr != expectedErr {
 			t.Errorf("Lookup%v: unexpected error: %v", v.name, err)
+		}
+	}
+}
+
+// Test whether the authentic bit is properly propagated, also in case of
+// RCodeNameError, but ignored for RCodeServerFailure.
+func TestLookupAuthentic(t *testing.T) {
+	// test with Success and NameError and with zero results.
+	// test with an IP lookup where A is authentic and AAAA is not
+	// check all Lookup functions, so return either the expected record, a NameError, or a ServFail. check with trustad off, and on.
+
+	var r *Resolver
+
+	var respondAuthentic bool
+	var responseRCode dnsmessage.RCode
+
+	responseBodies := map[dnsmessage.Type]dnsmessage.ResourceBody{
+		dnsmessage.TypePTR: &dnsmessage.PTRResource{
+			PTR: dnsmessage.MustNewName("one.two.three.four."),
+		},
+		dnsmessage.TypeCNAME: &dnsmessage.CNAMEResource{
+			CNAME: dnsmessage.MustNewName("one.two.three.four."),
+		},
+		dnsmessage.TypeA: &dnsmessage.AResource{
+			A: [4]byte{},
+		},
+		dnsmessage.TypeAAAA: &dnsmessage.AAAAResource{
+			AAAA: [16]byte{},
+		},
+		dnsmessage.TypeTXT: &dnsmessage.TXTResource{
+			TXT: []string{"test"},
+		},
+	}
+
+	funcs := map[string]func() (Result, error){
+		"ptr": func() (Result, error) {
+			_, result, err := r.LookupAddr(context.Background(), "1.2.3.4")
+			return result, err
+		},
+		"cname": func() (Result, error) {
+			_, result, err := r.LookupCNAME(context.Background(), "go.dev")
+			return result, err
+		},
+		"ip": func() (Result, error) {
+			_, result, err := r.LookupIP(context.Background(), "ip", "go.dev")
+			return result, err
+		},
+		"ip4": func() (Result, error) {
+			_, result, err := r.LookupIP(context.Background(), "ip4", "go.dev")
+			return result, err
+		},
+		"ip6": func() (Result, error) {
+			_, result, err := r.LookupIP(context.Background(), "ip6", "go.dev")
+			return result, err
+		},
+		"txt": func() (Result, error) {
+			_, result, err := r.LookupTXT(context.Background(), "go.dev")
+			return result, err
+		},
+	}
+
+	fake := fakeDNSServer{
+		rh: func(_, _ string, q dnsmessage.Message, _ time.Time) (dnsmessage.Message, error) {
+			r := dnsmessage.Message{
+				Header: dnsmessage.Header{
+					ID:                 q.Header.ID,
+					Response:           true,
+					RCode:              responseRCode,
+					RecursionDesired:   true,
+					RecursionAvailable: true,
+					AuthenticData:      q.AuthenticData && respondAuthentic,
+				},
+				Questions: q.Questions,
+			}
+			if resource, ok := responseBodies[q.Questions[0].Type]; !ok && responseRCode == dnsmessage.RCodeSuccess {
+				r.Header.RCode = dnsmessage.RCodeNotImplemented
+			} else if ok && responseRCode == dnsmessage.RCodeSuccess {
+				r.Answers = []dnsmessage.Resource{
+					{
+						Header: dnsmessage.ResourceHeader{
+							Name:  q.Questions[0].Name,
+							Type:  q.Questions[0].Type,
+							Class: dnsmessage.ClassINET,
+							TTL:   3600,
+						},
+						Body: resource,
+					},
+				}
+			}
+			return r, nil
+		},
+	}
+
+	r = &Resolver{PreferGo: true, Dial: fake.DialContext}
+
+	for _, respondAuthentic = range []bool{false, true} {
+		for _, rcode := range []dnsmessage.RCode{dnsmessage.RCodeSuccess, dnsmessage.RCodeServerFailure, dnsmessage.RCodeNameError} {
+			responseRCode = rcode
+
+			for name, fn := range funcs {
+				result, err := fn()
+
+				var dnsErr *DNSError
+				if rcode == dnsmessage.RCodeSuccess && err != nil {
+					t.Errorf("lookup %s, err %v, expected success", name, err)
+				} else if rcode == dnsmessage.RCodeServerFailure && (err == nil || !errors.As(err, &dnsErr) || !dnsErr.IsTemporary) {
+					t.Errorf("lookup %s, err %v, expected servfail", name, err)
+				} else if rcode == dnsmessage.RCodeNameError && (err == nil || !errors.As(err, &dnsErr) || !dnsErr.IsNotFound) {
+					t.Errorf("lookup %s, err %v, expected nxdomain", name, err)
+				}
+
+				// Should only get authentic for success or name error responses, not servfail.
+				expAuthentic := respondAuthentic && rcode != dnsmessage.RCodeServerFailure
+				if result.Authentic != expAuthentic {
+					t.Errorf("lookup %s with expected rcode %v, result authentic was %v, but opposite expected", name, rcode, result.Authentic)
+				}
+			}
 		}
 	}
 }

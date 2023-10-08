@@ -13,10 +13,10 @@ var (
 	testHookHostsPath = "/etc/hosts"
 	testHookLookupIP  = func(
 		ctx context.Context,
-		fn func(context.Context, string, string) ([]net.IPAddr, error),
+		fn func(context.Context, string, string) ([]net.IPAddr, Result, error),
 		network string,
 		host string,
-	) ([]net.IPAddr, error) {
+	) ([]net.IPAddr, Result, error) {
 		return fn(ctx, network, host)
 	}
 )

@@ -54,18 +54,18 @@ func lookupProtocol(_ context.Context, name string) (int, error) {
 	return lookupProtocolMap(name)
 }
 
-func (r *Resolver) lookupHost(ctx context.Context, host string) (addrs []string, err error) {
+func (r *Resolver) lookupHost(ctx context.Context, host string) (addrs []string, result Result, err error) {
 	order, conf := systemConf().hostLookupOrder(r, host)
 	return r.goLookupHostOrder(ctx, host, order, conf)
 }
 
-func (r *Resolver) lookupIP(ctx context.Context, network, host string) (addrs []net.IPAddr, err error) {
+func (r *Resolver) lookupIP(ctx context.Context, network, host string) (addrs []net.IPAddr, result Result, err error) {
 	if r.preferGo() {
 		return r.goLookupIP(ctx, network, host)
 	}
 	order, conf := systemConf().hostLookupOrder(r, host)
-	ips, _, err := r.goLookupIPCNAMEOrder(ctx, network, host, order, conf)
-	return ips, err
+	ips, _, result, err := r.goLookupIPCNAMEOrder(ctx, network, host, order, conf)
+	return ips, result, err
 }
 
 func (r *Resolver) lookupPort(ctx context.Context, network, service string) (int, error) {
@@ -74,28 +74,28 @@ func (r *Resolver) lookupPort(ctx context.Context, network, service string) (int
 	return goLookupPort(network, service)
 }
 
-func (r *Resolver) lookupCNAME(ctx context.Context, name string) (string, error) {
+func (r *Resolver) lookupCNAME(ctx context.Context, name string) (string, Result, error) {
 	order, conf := systemConf().hostLookupOrder(r, name)
 	return r.goLookupCNAME(ctx, name, order, conf)
 }
 
-func (r *Resolver) lookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, error) {
+func (r *Resolver) lookupSRV(ctx context.Context, service, proto, name string) (string, []*net.SRV, Result, error) {
 	return r.goLookupSRV(ctx, service, proto, name)
 }
 
-func (r *Resolver) lookupMX(ctx context.Context, name string) ([]*net.MX, error) {
+func (r *Resolver) lookupMX(ctx context.Context, name string) ([]*net.MX, Result, error) {
 	return r.goLookupMX(ctx, name)
 }
 
-func (r *Resolver) lookupNS(ctx context.Context, name string) ([]*net.NS, error) {
+func (r *Resolver) lookupNS(ctx context.Context, name string) ([]*net.NS, Result, error) {
 	return r.goLookupNS(ctx, name)
 }
 
-func (r *Resolver) lookupTXT(ctx context.Context, name string) ([]string, error) {
+func (r *Resolver) lookupTXT(ctx context.Context, name string) ([]string, Result, error) {
 	return r.goLookupTXT(ctx, name)
 }
 
-func (r *Resolver) lookupAddr(ctx context.Context, addr string) ([]string, error) {
+func (r *Resolver) lookupAddr(ctx context.Context, addr string) ([]string, Result, error) {
 	order, conf := systemConf().addrLookupOrder(r, addr)
 	return r.goLookupPTR(ctx, addr, order, conf)
 }

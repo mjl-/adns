@@ -141,7 +141,7 @@ func JoinHostPort(host, port string) string {
 // address or a DNS name, and returns a list of internet protocol
 // family addresses. The result contains at least one address when
 // error is nil.
-func (r *Resolver) internetAddrList(ctx context.Context, network, addr string) (addrList, error) {
+func (r *Resolver) internetAddrList(ctx context.Context, network, addr string) (addrList, Result, error) {
 	var (
 		err        error
 		host, port string
@@ -151,10 +151,10 @@ func (r *Resolver) internetAddrList(ctx context.Context, network, addr string) (
 	case "tcp", "tcp4", "tcp6", "udp", "udp4", "udp6":
 		if addr != "" {
 			if host, port, err = SplitHostPort(addr); err != nil {
-				return nil, err
+				return nil, Result{}, err
 			}
 			if portnum, err = r.LookupPort(ctx, network, port); err != nil {
-				return nil, err
+				return nil, Result{}, err
 			}
 		}
 	case "ip", "ip4", "ip6":
@@ -162,7 +162,7 @@ func (r *Resolver) internetAddrList(ctx context.Context, network, addr string) (
 			host = addr
 		}
 	default:
-		return nil, net.UnknownNetworkError(network)
+		return nil, Result{}, net.UnknownNetworkError(network)
 	}
 	inetaddr := func(ip net.IPAddr) net.Addr {
 		switch network {
@@ -177,13 +177,13 @@ func (r *Resolver) internetAddrList(ctx context.Context, network, addr string) (
 		}
 	}
 	if host == "" {
-		return addrList{inetaddr(net.IPAddr{})}, nil
+		return addrList{inetaddr(net.IPAddr{})}, Result{}, nil
 	}
 
 	// Try as a literal IP address, then as a DNS name.
-	ips, err := r.lookupIPAddr(ctx, network, host)
+	ips, result, err := r.lookupIPAddr(ctx, network, host)
 	if err != nil {
-		return nil, err
+		return nil, result, err
 	}
 	// Issue 18806: if the machine has halfway configured
 	// IPv6 such that it can bind on "::" (IPv6unspecified)
@@ -200,5 +200,6 @@ func (r *Resolver) internetAddrList(ctx context.Context, network, addr string) (
 	if network != "" && network[len(network)-1] == '6' {
 		filter = ipv6only
 	}
-	return filterAddrList(filter, ips, inetaddr, host)
+	addrs, err := filterAddrList(filter, ips, inetaddr, host)
+	return addrs, result, err
 }
