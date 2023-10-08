@@ -12,5 +12,6 @@ Modifications
     DNSSEC-signed according to the recursive resolver.
   - Resolver are also trusted if all name servers have loopback IPs. Resolvers
     are still also trusted if /etc/resolv.conf has "trust-ad" in the "options".
+  - New function LookupTLSA, to support DANE which uses DNS records of type TLSA.
 */
 package adns

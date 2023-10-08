@@ -6,6 +6,7 @@ package adns
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"net/netip"
 	"sync"
@@ -651,6 +652,33 @@ func (r *Resolver) LookupAddr(ctx context.Context, addr string) ([]string, Resul
 	return filteredNames, result, nil
 }
 
+// LookupTLSA calls LookupTLSA on the DefaultResolver.
+func LookupTLSA(port int, protocol, host string) ([]TLSA, Result, error) {
+	return DefaultResolver.LookupTLSA(context.Background(), port, protocol, host)
+}
+
+// LookupTLSA looks up a TLSA (TLS association) record for the port (service)
+// and protocol (e.g. tcp, udp) at the host.
+//
+// LookupTLSA looks up DNS name "_<port>._<protocol>.host". Except when port is 0
+// and protocol the empty string, then host is directly used to look up the TLSA
+// record.
+//
+// Callers must check the Authentic field of the Result before using a TLSA
+// record.
+//
+// Callers may want to handle DNSError with NotFound set to true (i.e. "nxdomain")
+// differently from other errors. DANE support is often optional, with
+// protocol-specific fallback behaviour.
+//
+// LookupTLSA follows CNAME records. For DANE, the secure/insecure DNSSEC
+// response must be taken into account when following CNAMEs to determine the
+// TLSA base domains. Callers should probably first resolve CNAMEs explicitly
+// for their (in)secure status.
+func (r *Resolver) LookupTLSA(ctx context.Context, port int, protocol, host string) (records []TLSA, result Result, err error) {
+	return r.lookupTLSA(ctx, port, protocol, host)
+}
+
 // errMalformedDNSRecordsDetail is the DNSError detail which is returned when a Resolver.Lookup...
 // method receives DNS records which contain invalid DNS names. This may be returned alongside
 // results which have had the malformed records filtered out.
@@ -878,4 +906,68 @@ func (r *Resolver) goLookupTXT(ctx context.Context, name string) ([]string, Resu
 		txts = append(txts, string(txtJoin))
 	}
 	return txts, result, nil
+}
+
+const typeTLSA = dnsmessage.Type(52)
+
+// goLookupTLSA is the native Go implementation of LookupTLSA.
+func (r *Resolver) goLookupTLSA(ctx context.Context, port int, protocol, host string) ([]TLSA, Result, error) {
+	var name string
+	if port == 0 && protocol == "" {
+		name = host
+	} else {
+		name = fmt.Sprintf("_%d._%s.%s", port, protocol, host)
+	}
+	p, server, result, err := r.lookup(ctx, name, typeTLSA, nil)
+	if err != nil {
+		return nil, result, err
+	}
+	var l []TLSA
+	for {
+		h, err := p.AnswerHeader()
+		if err == dnsmessage.ErrSectionDone {
+			break
+		}
+		if err != nil {
+			return nil, result, &DNSError{
+				Err:    "cannot unmarshal DNS message",
+				Name:   name,
+				Server: server,
+			}
+		}
+		if h.Type != typeTLSA {
+			if err := p.SkipAnswer(); err != nil {
+				return nil, result, &DNSError{
+					Err:    "cannot unmarshal DNS message",
+					Name:   name,
+					Server: server,
+				}
+			}
+			continue
+		}
+
+		r, err := p.UnknownResource()
+		if err != nil || len(r.Data) < 3 {
+			return nil, result, &DNSError{
+				Err:    "cannot unmarshal DNS message",
+				Name:   name,
+				Server: server,
+			}
+		}
+		record := TLSA{
+			TLSAUsage(r.Data[0]),
+			TLSASelector(r.Data[1]),
+			TLSAMatchType(r.Data[2]),
+			nil,
+		}
+		// We do not verify the contents/size of the data. We don't want to filter out
+		// values we don't understand. We'll leave it to the callers to see if a record is
+		// usable. Also because special behaviour may be required if records were found but
+		// all unusable.
+		buf := make([]byte, len(r.Data)-3)
+		copy(buf, r.Data[3:])
+		record.CertAssoc = buf
+		l = append(l, record)
+	}
+	return l, result, nil
 }

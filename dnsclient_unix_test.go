@@ -2631,6 +2631,12 @@ func TestLookupAuthentic(t *testing.T) {
 	var respondAuthentic bool
 	var responseRCode dnsmessage.RCode
 
+	tlsaData := make([]byte, 3+32)
+	tlsaData[0] = 3   // Usage DANE-EE.
+	tlsaData[1] = 1   // Selector SPKI.
+	tlsaData[2] = 1   // MatchType SHA2-256
+	tlsaData[3] = 255 // First byte of sha256 hash.
+
 	responseBodies := map[dnsmessage.Type]dnsmessage.ResourceBody{
 		dnsmessage.TypePTR: &dnsmessage.PTRResource{
 			PTR: dnsmessage.MustNewName("one.two.three.four."),
@@ -2646,6 +2652,10 @@ func TestLookupAuthentic(t *testing.T) {
 		},
 		dnsmessage.TypeTXT: &dnsmessage.TXTResource{
 			TXT: []string{"test"},
+		},
+		typeTLSA: &dnsmessage.UnknownResource{
+			Type: typeTLSA,
+			Data: tlsaData,
 		},
 	}
 
@@ -2672,6 +2682,10 @@ func TestLookupAuthentic(t *testing.T) {
 		},
 		"txt": func() (Result, error) {
 			_, result, err := r.LookupTXT(context.Background(), "go.dev")
+			return result, err
+		},
+		"tlsa": func() (Result, error) {
+			_, result, err := r.LookupTLSA(context.Background(), 25, "tcp", "go.dev")
 			return result, err
 		},
 	}
@@ -2733,5 +2747,79 @@ func TestLookupAuthentic(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestLookupTLSA(t *testing.T) {
+	fake := fakeDNSServer{
+		rh: func(_, _ string, q dnsmessage.Message, _ time.Time) (dnsmessage.Message, error) {
+			if q.Questions[0].Name != dnsmessage.MustNewName("_25._tcp.go.dev.") {
+				return dnsmessage.Message{
+					Header: dnsmessage.Header{
+						ID:                 q.Header.ID,
+						Response:           true,
+						RCode:              dnsmessage.RCodeNameError,
+						RecursionDesired:   true,
+						RecursionAvailable: true,
+					},
+					Questions: q.Questions,
+				}, nil
+			}
+
+			tlsaData := make([]byte, 3+32)
+			tlsaData[0] = 3   // Usage DANE-EE.
+			tlsaData[1] = 1   // Selector SPKI.
+			tlsaData[2] = 1   // MatchType SHA2-256
+			tlsaData[3] = 255 // First byte of sha256 hash.
+
+			r := dnsmessage.Message{
+				Header: dnsmessage.Header{
+					ID:                 q.Header.ID,
+					Response:           true,
+					RCode:              dnsmessage.RCodeSuccess,
+					RecursionDesired:   true,
+					RecursionAvailable: true,
+				},
+				Questions: q.Questions,
+				Answers: []dnsmessage.Resource{
+					{
+						Header: dnsmessage.ResourceHeader{
+							Name:  q.Questions[0].Name,
+							Type:  typeTLSA,
+							Class: dnsmessage.ClassINET,
+							TTL:   3600,
+						},
+						Body: &dnsmessage.UnknownResource{
+							Type: typeTLSA,
+							Data: tlsaData,
+						},
+					},
+					{
+						Header: dnsmessage.ResourceHeader{
+							Name:  q.Questions[0].Name,
+							Type:  typeTLSA,
+							Class: dnsmessage.ClassINET,
+							TTL:   3600,
+						},
+						Body: &dnsmessage.UnknownResource{
+							Type: typeTLSA,
+							Data: tlsaData,
+						},
+					},
+				},
+			}
+			return r, nil
+		},
+	}
+
+	expRecord := TLSA{TLSAUsageDANEEE, TLSASelectorSPKI, TLSAMatchTypeSHA256, make([]byte, 32)}
+	expRecord.CertAssoc[0] = 255
+	expRecords := []TLSA{expRecord, expRecord}
+
+	r := &Resolver{PreferGo: true, Dial: fake.DialContext}
+	if records, _, err := r.LookupTLSA(context.Background(), 25, "tcp", "go.dev"); err != nil {
+		t.Errorf("lookup TLSA, got err %v", err)
+	} else if !reflect.DeepEqual(records, expRecords) {
+		t.Errorf("lookup TLSA, got records %v, expected %v", records, expRecords)
 	}
 }

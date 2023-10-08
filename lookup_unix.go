@@ -99,3 +99,7 @@ func (r *Resolver) lookupAddr(ctx context.Context, addr string) ([]string, Resul
 	order, conf := systemConf().addrLookupOrder(r, addr)
 	return r.goLookupPTR(ctx, addr, order, conf)
 }
+
+func (r *Resolver) lookupTLSA(ctx context.Context, port int, protocol, host string) ([]TLSA, Result, error) {
+	return r.goLookupTLSA(ctx, port, protocol, host)
+}

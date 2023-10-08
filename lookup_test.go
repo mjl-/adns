@@ -963,6 +963,7 @@ func TestNilResolverLookup(t *testing.T) {
 	r.LookupPort(ctx, "tcp", "smtp")
 	r.LookupSRV(ctx, "service", "proto", "name")
 	r.LookupTXT(ctx, "gmail.com")
+	r.LookupTLSA(ctx, 25, "tcp", "gmail.com")
 }
 
 // TestLookupHostCancel verifies that lookup works even after many
