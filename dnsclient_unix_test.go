@@ -2461,7 +2461,7 @@ func TestDNSTrustAD(t *testing.T) {
 	defer conf.teardown()
 
 	// Non-loopback nameserver without "options trust-ad" is not trusted.
-	err = conf.writeAndUpdate([]string{"nameserver 127.0.0.1"})
+	err = conf.writeAndUpdate([]string{"nameserver 10.0.0.1"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2469,7 +2469,25 @@ func TestDNSTrustAD(t *testing.T) {
 		t.Errorf("lookup failed: %v", err)
 	}
 
-	err = conf.writeAndUpdate([]string{"nameserver 127.0.0.1", "options trust-ad"})
+	// Loopback name server is always trusted.
+	err = conf.writeAndUpdate([]string{"nameserver 127.0.0.2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := r.LookupIPAddr(context.Background(), "trustad.go.dev"); err != nil {
+		t.Errorf("lookup failed: %v", err)
+	}
+
+	err = conf.writeAndUpdate([]string{"nameserver ::1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := r.LookupIPAddr(context.Background(), "trustad.go.dev"); err != nil {
+		t.Errorf("lookup failed: %v", err)
+	}
+
+	// Non-loopback name server needs "options trust-ad".
+	err = conf.writeAndUpdate([]string{"nameserver 10.0.0.1", "options trust-ad"})
 	if err != nil {
 		t.Fatal(err)
 	}

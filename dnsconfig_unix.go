@@ -9,6 +9,7 @@
 package adns
 
 import (
+	"net"
 	"net/netip"
 	"time"
 
@@ -25,6 +26,7 @@ func dnsReadConfig(filename string) *dnsConfig {
 	file, err := open(filename)
 	if err != nil {
 		conf.servers = defaultNS
+		conf.trustAD = true
 		conf.search = dnsDefaultSearch()
 		conf.err = err
 		return conf
@@ -34,6 +36,7 @@ func dnsReadConfig(filename string) *dnsConfig {
 		conf.mtime = fi.ModTime()
 	} else {
 		conf.servers = defaultNS
+		conf.trustAD = true
 		conf.search = dnsDefaultSearch()
 		conf.err = err
 		return conf
@@ -137,6 +140,23 @@ func dnsReadConfig(filename string) *dnsConfig {
 	}
 	if len(conf.servers) == 0 {
 		conf.servers = defaultNS
+	}
+	if !conf.trustAD {
+		// If we only have name servers on loopback IP, we trust them.
+		// As mentioned in RFC 6698, section A.3 point 2 (line 1693).
+		conf.trustAD = true
+		for _, addr := range conf.servers {
+			host, _, err := net.SplitHostPort(addr)
+			if err != nil {
+				conf.trustAD = false
+				break
+			}
+			ip := net.ParseIP(host)
+			if ip == nil || !ip.IsLoopback() {
+				conf.trustAD = false
+				break
+			}
+		}
 	}
 	if len(conf.search) == 0 {
 		conf.search = dnsDefaultSearch()

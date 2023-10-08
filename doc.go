@@ -10,5 +10,7 @@ Modifications
   - Each Lookup* also returns a Result with the "Authentic" field representing if
     the response had the "authentic data" bit (and is trusted), i.e. was
     DNSSEC-signed according to the recursive resolver.
+  - Resolver are also trusted if all name servers have loopback IPs. Resolvers
+    are still also trusted if /etc/resolv.conf has "trust-ad" in the "options".
 */
 package adns

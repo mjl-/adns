@@ -66,6 +66,7 @@ var dnsReadConfigTests = []struct {
 		name: "testdata/empty-resolv.conf",
 		want: &dnsConfig{
 			servers:  defaultNS,
+			trustAD:  true,
 			ndots:    1,
 			timeout:  5 * time.Second,
 			attempts: 2,
@@ -76,6 +77,7 @@ var dnsReadConfigTests = []struct {
 		name: "testdata/invalid-ndots-resolv.conf",
 		want: &dnsConfig{
 			servers:  defaultNS,
+			trustAD:  true,
 			ndots:    0,
 			timeout:  5 * time.Second,
 			attempts: 2,
@@ -86,6 +88,7 @@ var dnsReadConfigTests = []struct {
 		name: "testdata/large-ndots-resolv.conf",
 		want: &dnsConfig{
 			servers:  defaultNS,
+			trustAD:  true,
 			ndots:    15,
 			timeout:  5 * time.Second,
 			attempts: 2,
@@ -96,6 +99,7 @@ var dnsReadConfigTests = []struct {
 		name: "testdata/negative-ndots-resolv.conf",
 		want: &dnsConfig{
 			servers:  defaultNS,
+			trustAD:  true,
 			ndots:    0,
 			timeout:  5 * time.Second,
 			attempts: 2,
@@ -117,6 +121,7 @@ var dnsReadConfigTests = []struct {
 		name: "testdata/single-request-resolv.conf",
 		want: &dnsConfig{
 			servers:       defaultNS,
+			trustAD:       true,
 			ndots:         1,
 			singleRequest: true,
 			timeout:       5 * time.Second,
@@ -128,6 +133,7 @@ var dnsReadConfigTests = []struct {
 		name: "testdata/single-request-reopen-resolv.conf",
 		want: &dnsConfig{
 			servers:       defaultNS,
+			trustAD:       true,
 			ndots:         1,
 			singleRequest: true,
 			timeout:       5 * time.Second,
@@ -139,6 +145,7 @@ var dnsReadConfigTests = []struct {
 		name: "testdata/linux-use-vc-resolv.conf",
 		want: &dnsConfig{
 			servers:  defaultNS,
+			trustAD:  true,
 			ndots:    1,
 			useTCP:   true,
 			timeout:  5 * time.Second,
@@ -150,6 +157,7 @@ var dnsReadConfigTests = []struct {
 		name: "testdata/freebsd-usevc-resolv.conf",
 		want: &dnsConfig{
 			servers:  defaultNS,
+			trustAD:  true,
 			ndots:    1,
 			useTCP:   true,
 			timeout:  5 * time.Second,
@@ -161,6 +169,7 @@ var dnsReadConfigTests = []struct {
 		name: "testdata/openbsd-tcp-resolv.conf",
 		want: &dnsConfig{
 			servers:  defaultNS,
+			trustAD:  true,
 			ndots:    1,
 			useTCP:   true,
 			timeout:  5 * time.Second,
@@ -203,6 +212,7 @@ func TestDNSReadMissingFile(t *testing.T) {
 	conf.err = nil
 	want := &dnsConfig{
 		servers:  defaultNS,
+		trustAD:  true,
 		ndots:    1,
 		timeout:  5 * time.Second,
 		attempts: 2,
