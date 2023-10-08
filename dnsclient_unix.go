@@ -180,14 +180,14 @@ func (r *Resolver) exchange(ctx context.Context, server string, q dnsmessage.Que
 		networks = []string{"udp", "tcp"}
 	}
 	for _, network := range networks {
-		ctx, cancel := context.WithDeadline(ctx, time.Now().Add(timeout))
+		nctx, cancel := context.WithDeadline(ctx, time.Now().Add(timeout))
 		defer cancel()
 
-		c, err := r.dial(ctx, network, server)
+		c, err := r.dial(nctx, network, server)
 		if err != nil {
 			return dnsmessage.Parser{}, dnsmessage.Header{}, err
 		}
-		if d, ok := ctx.Deadline(); ok && !d.IsZero() {
+		if d, ok := nctx.Deadline(); ok && !d.IsZero() {
 			c.SetDeadline(d)
 		}
 		var p dnsmessage.Parser
@@ -583,8 +583,8 @@ func (r *Resolver) goLookupHostOrder(ctx context.Context, name string, order hos
 func goLookupIPFiles(name string) (addrs []net.IPAddr, canonical string) {
 	addr, canonical := lookupStaticHost(name)
 	for _, haddr := range addr {
-		haddr, zone := splitHostZone(haddr)
-		if ip := net.ParseIP(haddr); ip != nil {
+		xhaddr, zone := splitHostZone(haddr)
+		if ip := net.ParseIP(xhaddr); ip != nil {
 			addr := net.IPAddr{IP: ip, Zone: zone}
 			addrs = append(addrs, addr)
 		}
