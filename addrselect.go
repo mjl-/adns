@@ -4,21 +4,22 @@
 
 // Minimal RFC 6724 address selection.
 
-package net
+package adns
 
 import (
+	"net"
 	"net/netip"
 	"sort"
 )
 
-func sortByRFC6724(addrs []IPAddr) {
+func sortByRFC6724(addrs []net.IPAddr) {
 	if len(addrs) < 2 {
 		return
 	}
 	sortByRFC6724withSrcs(addrs, srcAddrs(addrs))
 }
 
-func sortByRFC6724withSrcs(addrs []IPAddr, srcs []netip.Addr) {
+func sortByRFC6724withSrcs(addrs []net.IPAddr, srcs []netip.Addr) {
 	if len(addrs) != len(srcs) {
 		panic("internal error")
 	}
@@ -40,15 +41,15 @@ func sortByRFC6724withSrcs(addrs []IPAddr, srcs []netip.Addr) {
 // srcAddrs tries to UDP-connect to each address to see if it has a
 // route. (This doesn't send any packets). The destination port
 // number is irrelevant.
-func srcAddrs(addrs []IPAddr) []netip.Addr {
+func srcAddrs(addrs []net.IPAddr) []netip.Addr {
 	srcs := make([]netip.Addr, len(addrs))
-	dst := UDPAddr{Port: 9}
+	dst := net.UDPAddr{Port: 9}
 	for i := range addrs {
 		dst.IP = addrs[i].IP
 		dst.Zone = addrs[i].Zone
-		c, err := DialUDP("udp", nil, &dst)
+		c, err := net.DialUDP("udp", nil, &dst)
 		if err == nil {
-			if src, ok := c.LocalAddr().(*UDPAddr); ok {
+			if src, ok := c.LocalAddr().(*net.UDPAddr); ok {
 				srcs[i], _ = netip.AddrFromSlice(src.IP)
 			}
 			c.Close()
@@ -76,7 +77,7 @@ func ipAttrOf(ip netip.Addr) ipAttr {
 }
 
 type byRFC6724 struct {
-	addrs    []IPAddr // addrs to sort
+	addrs    []net.IPAddr // addrs to sort
 	addrAttr []ipAttr
 	srcs     []netip.Addr // or not valid addr if unreachable
 	srcAttr  []ipAttr
@@ -340,7 +341,7 @@ func classifyScope(ip netip.Addr) scope {
 // If a and b are different IP versions, 0 is returned.
 //
 // See https://tools.ietf.org/html/rfc6724#section-2.2
-func commonPrefixLen(a netip.Addr, b IP) (cpl int) {
+func commonPrefixLen(a netip.Addr, b net.IP) (cpl int) {
 	if b4 := b.To4(); b4 != nil {
 		b = b4
 	}

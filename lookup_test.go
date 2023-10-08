@@ -4,14 +4,15 @@
 
 //go:build !js && !wasip1
 
-package net
+package adns
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"internal/testenv"
+	"net"
 	"net/netip"
+	"os"
 	"reflect"
 	"runtime"
 	"sort"
@@ -20,22 +21,18 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/mjl-/adns/internal/testenv"
 )
+
+func mustHaveExternalNetwork(t *testing.T) {
+	if os.Getenv("HAVE_EXTERNAL_NETWORK") == "" {
+		t.Skip("no external network")
+	}
+}
 
 func hasSuffixFold(s, suffix string) bool {
 	return strings.HasSuffix(strings.ToLower(s), strings.ToLower(suffix))
-}
-
-func lookupLocalhost(ctx context.Context, fn func(context.Context, string, string) ([]IPAddr, error), network, host string) ([]IPAddr, error) {
-	switch host {
-	case "localhost":
-		return []IPAddr{
-			{IP: IPv4(127, 0, 0, 1)},
-			{IP: IPv6loopback},
-		}, nil
-	default:
-		return fn(ctx, network, host)
-	}
 }
 
 // The Lookup APIs use various sources such as local database, DNS or
@@ -411,7 +408,7 @@ func TestLookupGoogleHost(t *testing.T) {
 			t.Error("got no record")
 		}
 		for _, addr := range addrs {
-			if ParseIP(addr) == nil {
+			if net.ParseIP(addr) == nil {
 				t.Errorf("got %q; want a literal IP address", addr)
 			}
 		}
@@ -560,7 +557,7 @@ func TestDNSFlood(t *testing.T) {
 			switch err := err.(type) {
 			case nil:
 				qstats.succeeded++
-			case Error:
+			case net.Error:
 				qstats.failed++
 				if err.Timeout() {
 					qstats.timeout++
@@ -720,7 +717,7 @@ func testDots(t *testing.T, mode string) {
 	}
 }
 
-func mxString(mxs []*MX) string {
+func mxString(mxs []*net.MX) string {
 	var buf strings.Builder
 	sep := ""
 	fmt.Fprintf(&buf, "[")
@@ -732,7 +729,7 @@ func mxString(mxs []*MX) string {
 	return buf.String()
 }
 
-func nsString(nss []*NS) string {
+func nsString(nss []*net.NS) string {
 	var buf strings.Builder
 	sep := ""
 	fmt.Fprintf(&buf, "[")
@@ -744,7 +741,7 @@ func nsString(nss []*NS) string {
 	return buf.String()
 }
 
-func srvString(srvs []*SRV) string {
+func srvString(srvs []*net.SRV) string {
 	var buf strings.Builder
 	sep := ""
 	fmt.Fprintf(&buf, "[")
@@ -902,10 +899,10 @@ func TestLookupContextCancel(t *testing.T) {
 	// (ensuring that it has performed any synchronous cleanup).
 	testHookLookupIP = func(
 		ctx context.Context,
-		fn func(context.Context, string, string) ([]IPAddr, error),
+		fn func(context.Context, string, string) ([]net.IPAddr, error),
 		network string,
 		host string,
-	) ([]IPAddr, error) {
+	) ([]net.IPAddr, error) {
 		select {
 		case <-unblockLookup:
 		default:
@@ -1017,12 +1014,12 @@ type lookupCustomResolver struct {
 	dialed bool
 }
 
-func (lcr *lookupCustomResolver) dial() func(ctx context.Context, network, address string) (Conn, error) {
-	return func(ctx context.Context, network, address string) (Conn, error) {
+func (lcr *lookupCustomResolver) dial() func(ctx context.Context, network, address string) (net.Conn, error) {
+	return func(ctx context.Context, network, address string) (net.Conn, error) {
 		lcr.mu.Lock()
 		lcr.dialed = true
 		lcr.mu.Unlock()
-		return Dial(network, address)
+		return net.Dial(network, address)
 	}
 }
 
@@ -1116,12 +1113,12 @@ func TestLookupIPAddrPreservesContextValues(t *testing.T) {
 		ctx = context.WithValue(ctx, kv.key, kv.value)
 	}
 
-	wantIPs := []IPAddr{
-		{IP: IPv4(127, 0, 0, 1)},
-		{IP: IPv6loopback},
+	wantIPs := []net.IPAddr{
+		{IP: net.IPv4(127, 0, 0, 1)},
+		{IP: net.IPv6loopback},
 	}
 
-	checkCtxValues := func(ctx_ context.Context, fn func(context.Context, string, string) ([]IPAddr, error), network, host string) ([]IPAddr, error) {
+	checkCtxValues := func(ctx_ context.Context, fn func(context.Context, string, string) ([]net.IPAddr, error), network, host string) ([]net.IPAddr, error) {
 		for _, kv := range keyValues {
 			g, w := ctx_.Value(kv.key), kv.value
 			if !reflect.DeepEqual(g, w) {
@@ -1160,21 +1157,21 @@ func TestLookupIPAddrConcurrentCallsForNetworks(t *testing.T) {
 		{"udp", "golang.org"},
 		{"udp", "golang.org"},
 	}
-	results := map[[2]string][]IPAddr{
+	results := map[[2]string][]net.IPAddr{
 		{"udp", "golang.org"}: {
-			{IP: IPv4(127, 0, 0, 1)},
-			{IP: IPv6loopback},
+			{IP: net.IPv4(127, 0, 0, 1)},
+			{IP: net.IPv6loopback},
 		},
 		{"udp4", "golang.org"}: {
-			{IP: IPv4(127, 0, 0, 1)},
+			{IP: net.IPv4(127, 0, 0, 1)},
 		},
 		{"udp6", "golang.org"}: {
-			{IP: IPv6loopback},
+			{IP: net.IPv6loopback},
 		},
 	}
 	calls := int32(0)
 	waitCh := make(chan struct{})
-	testHookLookupIP = func(ctx context.Context, fn func(context.Context, string, string) ([]IPAddr, error), network, host string) ([]IPAddr, error) {
+	testHookLookupIP = func(ctx context.Context, fn func(context.Context, string, string) ([]net.IPAddr, error), network, host string) ([]net.IPAddr, error) {
 		// We'll block until this is called one time for each different
 		// expected result. This will ensure that the lookup group would wait
 		// for the existing call if it was to be reused.
@@ -1339,7 +1336,7 @@ func TestDNSTimeout(t *testing.T) {
 	defer dnsWaitGroup.Wait()
 
 	timeoutHookGo := make(chan bool, 1)
-	timeoutHook := func(ctx context.Context, fn func(context.Context, string, string) ([]IPAddr, error), network, host string) ([]IPAddr, error) {
+	timeoutHook := func(ctx context.Context, fn func(context.Context, string, string) ([]net.IPAddr, error), network, host string) ([]net.IPAddr, error) {
 		<-timeoutHookGo
 		return nil, context.DeadlineExceeded
 	}

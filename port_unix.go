@@ -6,11 +6,12 @@
 
 // Read system port mappings from /etc/services
 
-package net
+package adns
 
 import (
-	"internal/bytealg"
 	"sync"
+
+	"github.com/mjl-/adns/internal/bytealg"
 )
 
 var onceReadServices sync.Once

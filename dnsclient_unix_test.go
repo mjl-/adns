@@ -4,13 +4,13 @@
 
 //go:build unix
 
-package net
+package adns
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"internal/testenv"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -23,6 +23,8 @@ import (
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
+
+	"github.com/mjl-/adns/internal/testenv"
 )
 
 var goResolver = Resolver{PreferGo: true}
@@ -804,7 +806,7 @@ type fakeDNSServer struct {
 	alwaysTCP bool
 }
 
-func (server *fakeDNSServer) DialContext(_ context.Context, n, s string) (Conn, error) {
+func (server *fakeDNSServer) DialContext(_ context.Context, n, s string) (net.Conn, error) {
 	if server.alwaysTCP || n == "tcp" || n == "tcp4" || n == "tcp6" {
 		return &fakeDNSConn{tcp: true, server: server, n: n, s: s}, nil
 	}
@@ -812,7 +814,7 @@ func (server *fakeDNSServer) DialContext(_ context.Context, n, s string) (Conn, 
 }
 
 type fakeDNSConn struct {
-	Conn
+	net.Conn
 	tcp    bool
 	server *fakeDNSServer
 	n      string
@@ -877,7 +879,7 @@ func (f *fakeDNSConn) SetDeadline(t time.Time) error {
 }
 
 type fakeDNSPacketConn struct {
-	PacketConn
+	net.PacketConn
 	fakeDNSConn
 }
 
@@ -891,7 +893,7 @@ func (f *fakeDNSPacketConn) Close() error {
 
 // UDP round-tripper algorithm should ignore invalid DNS responses (issue 13281).
 func TestIgnoreDNSForgeries(t *testing.T) {
-	c, s := Pipe()
+	c, s := net.Pipe()
 	go func() {
 		b := make([]byte, maxDNSPacketSize)
 		n, err := s.Read(b)
@@ -1246,7 +1248,7 @@ func TestStrictErrorsLookupIP(t *testing.T) {
 			case resolveOK:
 				// Handle below.
 			case resolveOpError:
-				return dnsmessage.Message{}, &OpError{Op: "write", Err: fmt.Errorf("socket on fire")}
+				return dnsmessage.Message{}, &net.OpError{Op: "write", Err: fmt.Errorf("socket on fire")}
 			case resolveServfail:
 				return dnsmessage.Message{
 					Header: dnsmessage.Header{
@@ -1470,13 +1472,13 @@ func TestIssue8434(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	if ne, ok := err.(Error); !ok {
+	if ne, ok := err.(net.Error); !ok {
 		t.Fatalf("err = %#v; wanted something supporting net.Error", err)
 	} else if !ne.Temporary() {
 		t.Fatalf("Temporary = false for err = %#v; want Temporary == true", err)
 	}
 	if de, ok := err.(*DNSError); !ok {
-		t.Fatalf("err = %#v; wanted a *net.DNSError", err)
+		t.Fatalf("err = %#v; wanted a *DNSError", err)
 	} else if !de.IsTemporary {
 		t.Fatalf("IsTemporary = false for err = %#v; want IsTemporary == true", err)
 	}
@@ -1498,11 +1500,11 @@ func TestIssueNoSuchHostExists(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected an error")
 	}
-	if _, ok := err.(Error); !ok {
+	if _, ok := err.(net.Error); !ok {
 		t.Fatalf("err = %#v; wanted something supporting net.Error", err)
 	}
 	if de, ok := err.(*DNSError); !ok {
-		t.Fatalf("err = %#v; wanted a *net.DNSError", err)
+		t.Fatalf("err = %#v; wanted a *DNSError", err)
 	} else if !de.IsNotFound {
 		t.Fatalf("IsNotFound = false for err = %#v; want IsNotFound == true", err)
 	}
@@ -1572,7 +1574,7 @@ func TestNoSuchHost(t *testing.T) {
 			}
 			de, ok := err.(*DNSError)
 			if !ok {
-				t.Fatalf("err = %#v; wanted a *net.DNSError", err)
+				t.Fatalf("err = %#v; wanted a *DNSError", err)
 			}
 			if de.Err != errNoSuchHost.Error() {
 				t.Fatalf("Err = %#v; wanted %q", de.Err, errNoSuchHost.Error())
@@ -1977,7 +1979,7 @@ func TestCVE202133195(t *testing.T) {
 		{
 			name: "SRV (bad record)",
 			f: func(t *testing.T) {
-				expected := []*SRV{
+				expected := []*net.SRV{
 					{
 						Target: "good.golang.org.",
 					},
@@ -2015,7 +2017,7 @@ func TestCVE202133195(t *testing.T) {
 		{
 			name: "MX",
 			f: func(t *testing.T) {
-				expected := []*MX{
+				expected := []*net.MX{
 					{
 						Host: "good.golang.org.",
 					},
@@ -2040,7 +2042,7 @@ func TestCVE202133195(t *testing.T) {
 		{
 			name: "NS",
 			f: func(t *testing.T) {
-				expected := []*NS{
+				expected := []*net.NS{
 					{
 						Host: "good.golang.org.",
 					},
@@ -2122,7 +2124,7 @@ func TestNullMX(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LookupMX: %v", err)
 	}
-	if want := []*MX{&MX{Host: "."}}; !reflect.DeepEqual(rrset, want) {
+	if want := []*net.MX{&net.MX{Host: "."}}; !reflect.DeepEqual(rrset, want) {
 		records := []string{}
 		for _, rr := range rrset {
 			records = append(records, fmt.Sprintf("%v", rr))
@@ -2163,7 +2165,7 @@ func TestRootNS(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LookupNS: %v", err)
 	}
-	if want := []*NS{&NS{Host: "i.root-servers.net."}}; !reflect.DeepEqual(rrset, want) {
+	if want := []*net.NS{&net.NS{Host: "i.root-servers.net."}}; !reflect.DeepEqual(rrset, want) {
 		records := []string{}
 		for _, rr := range rrset {
 			records = append(records, fmt.Sprintf("%v", rr))
@@ -2478,7 +2480,7 @@ func TestDNSTrustAD(t *testing.T) {
 }
 
 func TestDNSConfigNoReload(t *testing.T) {
-	r := &Resolver{PreferGo: true, Dial: func(ctx context.Context, network, address string) (Conn, error) {
+	r := &Resolver{PreferGo: true, Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
 		if address != "192.0.2.1:53" {
 			return nil, errors.New("configuration unexpectedly changed")
 		}

@@ -2,21 +2,21 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package net
+package adns
 
 import (
-	"internal/bytealg"
-	"internal/itoa"
+	mathrand "math/rand"
+	"net"
 	"sort"
 
 	"golang.org/x/net/dns/dnsmessage"
+
+	"github.com/mjl-/adns/internal/bytealg"
+	"github.com/mjl-/adns/internal/itoa"
 )
 
-// provided by runtime
-func fastrandu() uint
-
 func randInt() int {
-	return int(fastrandu() >> 1) // clear sign bit
+	return mathrand.Int()
 }
 
 func randIntn(n int) int {
@@ -27,7 +27,7 @@ func randIntn(n int) int {
 // address addr suitable for rDNS (PTR) record lookup or an error if it fails
 // to parse the IP address.
 func reverseaddr(addr string) (arpa string, err error) {
-	ip := ParseIP(addr)
+	ip := net.ParseIP(addr)
 	if ip == nil {
 		return "", &DNSError{Err: "unrecognized address", Name: addr}
 	}
@@ -146,16 +146,8 @@ func absDomainName(s string) string {
 	return s
 }
 
-// An SRV represents a single DNS SRV record.
-type SRV struct {
-	Target   string
-	Port     uint16
-	Priority uint16
-	Weight   uint16
-}
-
 // byPriorityWeight sorts SRV records by ascending priority and weight.
-type byPriorityWeight []*SRV
+type byPriorityWeight []*net.SRV
 
 func (s byPriorityWeight) Len() int { return len(s) }
 func (s byPriorityWeight) Less(i, j int) bool {
@@ -200,14 +192,8 @@ func (addrs byPriorityWeight) sort() {
 	addrs[i:].shuffleByWeight()
 }
 
-// An MX represents a single DNS MX record.
-type MX struct {
-	Host string
-	Pref uint16
-}
-
 // byPref implements sort.Interface to sort MX records by preference
-type byPref []*MX
+type byPref []*net.MX
 
 func (s byPref) Len() int           { return len(s) }
 func (s byPref) Less(i, j int) bool { return s[i].Pref < s[j].Pref }
@@ -220,9 +206,4 @@ func (s byPref) sort() {
 		s[i], s[j] = s[j], s[i]
 	}
 	sort.Sort(s)
-}
-
-// An NS represents a single DNS NS record.
-type NS struct {
-	Host string
 }

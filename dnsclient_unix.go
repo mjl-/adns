@@ -12,13 +12,14 @@
 //	Random UDP source port (net.Dial should do that for us).
 //	Random request IDs.
 
-package net
+package adns
 
 import (
 	"context"
+	cryptorand "crypto/rand"
 	"errors"
-	"internal/itoa"
 	"io"
+	"net"
 	"os"
 	"runtime"
 	"sync"
@@ -26,6 +27,8 @@ import (
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
+
+	"github.com/mjl-/adns/internal/itoa"
 )
 
 const (
@@ -53,7 +56,13 @@ var (
 )
 
 func newRequest(q dnsmessage.Question, ad bool) (id uint16, udpReq, tcpReq []byte, err error) {
-	id = uint16(randInt())
+	var idbuf [2]byte
+	_, err = cryptorand.Read(idbuf[:])
+	if err != nil {
+		return 0, nil, nil, err
+	}
+	id = uint16(idbuf[0])<<8 | uint16(idbuf[1])
+
 	b := dnsmessage.NewBuilder(make([]byte, 2, 514), dnsmessage.Header{ID: id, RecursionDesired: true, AuthenticData: ad})
 	if err := b.StartQuestions(); err != nil {
 		return 0, nil, nil, err
@@ -98,7 +107,7 @@ func checkResponse(reqID uint16, reqQues dnsmessage.Question, respHdr dnsmessage
 	return true
 }
 
-func dnsPacketRoundTrip(c Conn, id uint16, query dnsmessage.Question, b []byte) (dnsmessage.Parser, dnsmessage.Header, error) {
+func dnsPacketRoundTrip(c net.Conn, id uint16, query dnsmessage.Question, b []byte) (dnsmessage.Parser, dnsmessage.Header, error) {
 	if _, err := c.Write(b); err != nil {
 		return dnsmessage.Parser{}, dnsmessage.Header{}, err
 	}
@@ -125,7 +134,7 @@ func dnsPacketRoundTrip(c Conn, id uint16, query dnsmessage.Question, b []byte) 
 	}
 }
 
-func dnsStreamRoundTrip(c Conn, id uint16, query dnsmessage.Question, b []byte) (dnsmessage.Parser, dnsmessage.Header, error) {
+func dnsStreamRoundTrip(c net.Conn, id uint16, query dnsmessage.Question, b []byte) (dnsmessage.Parser, dnsmessage.Header, error) {
 	if _, err := c.Write(b); err != nil {
 		return dnsmessage.Parser{}, dnsmessage.Header{}, err
 	}
@@ -183,7 +192,7 @@ func (r *Resolver) exchange(ctx context.Context, server string, q dnsmessage.Que
 		}
 		var p dnsmessage.Parser
 		var h dnsmessage.Header
-		if _, ok := c.(PacketConn); ok {
+		if _, ok := c.(net.PacketConn); ok {
 			p, h, err = dnsPacketRoundTrip(c, id, q, udpReq)
 		} else {
 			p, h, err = dnsStreamRoundTrip(c, id, q, tcpReq)
@@ -281,12 +290,12 @@ func (r *Resolver) tryOneName(ctx context.Context, cfg *dnsConfig, name string, 
 					Name:   name,
 					Server: server,
 				}
-				if nerr, ok := err.(Error); ok && nerr.Timeout() {
+				if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
 					dnsErr.IsTimeout = true
 				}
 				// Set IsTemporary for socket-level errors. Note that this flag
 				// may also be used to indicate a SERVFAIL response.
-				if _, ok := err.(*OpError); ok {
+				if _, ok := err.(*net.OpError); ok {
 					dnsErr.IsTemporary = true
 				}
 				lastErr = dnsErr
@@ -445,7 +454,7 @@ func (r *Resolver) lookup(ctx context.Context, name string, qtype dnsmessage.Typ
 		if err == nil {
 			break
 		}
-		if nerr, ok := err.(Error); ok && nerr.Temporary() && r.strictErrors() {
+		if nerr, ok := err.(net.Error); ok && nerr.Temporary() && r.strictErrors() {
 			// If we hit a temporary error with StrictErrors enabled,
 			// stop immediately instead of trying more names.
 			break
@@ -571,12 +580,12 @@ func (r *Resolver) goLookupHostOrder(ctx context.Context, name string, order hos
 }
 
 // lookup entries from /etc/hosts
-func goLookupIPFiles(name string) (addrs []IPAddr, canonical string) {
+func goLookupIPFiles(name string) (addrs []net.IPAddr, canonical string) {
 	addr, canonical := lookupStaticHost(name)
 	for _, haddr := range addr {
 		haddr, zone := splitHostZone(haddr)
-		if ip := ParseIP(haddr); ip != nil {
-			addr := IPAddr{IP: ip, Zone: zone}
+		if ip := net.ParseIP(haddr); ip != nil {
+			addr := net.IPAddr{IP: ip, Zone: zone}
 			addrs = append(addrs, addr)
 		}
 	}
@@ -586,13 +595,13 @@ func goLookupIPFiles(name string) (addrs []IPAddr, canonical string) {
 
 // goLookupIP is the native Go implementation of LookupIP.
 // The libc versions are in cgo_*.go.
-func (r *Resolver) goLookupIP(ctx context.Context, network, host string) (addrs []IPAddr, err error) {
+func (r *Resolver) goLookupIP(ctx context.Context, network, host string) (addrs []net.IPAddr, err error) {
 	order, conf := systemConf().hostLookupOrder(r, host)
 	addrs, _, err = r.goLookupIPCNAMEOrder(ctx, network, host, order, conf)
 	return
 }
 
-func (r *Resolver) goLookupIPCNAMEOrder(ctx context.Context, network, name string, order hostLookupOrder, conf *dnsConfig) (addrs []IPAddr, cname dnsmessage.Name, err error) {
+func (r *Resolver) goLookupIPCNAMEOrder(ctx context.Context, network, name string, order hostLookupOrder, conf *dnsConfig) (addrs []net.IPAddr, cname dnsmessage.Name, err error) {
 	if order == hostLookupFilesDNS || order == hostLookupFiles {
 		var canonical string
 		addrs, canonical = goLookupIPFiles(name)
@@ -668,7 +677,7 @@ func (r *Resolver) goLookupIPCNAMEOrder(ctx context.Context, network, name strin
 		for _, qtype := range qtypes {
 			result := responseFn(fqdn, qtype)
 			if result.error != nil {
-				if nerr, ok := result.error.(Error); ok && nerr.Temporary() && r.strictErrors() {
+				if nerr, ok := result.error.(net.Error); ok && nerr.Temporary() && r.strictErrors() {
 					// This error will abort the nameList loop.
 					hitStrictError = true
 					lastErr = result.error
@@ -718,7 +727,7 @@ func (r *Resolver) goLookupIPCNAMEOrder(ctx context.Context, network, name strin
 						}
 						break loop
 					}
-					addrs = append(addrs, IPAddr{IP: IP(a.A[:])})
+					addrs = append(addrs, net.IPAddr{IP: net.IP(a.A[:])})
 					if cname.Length == 0 && h.Name.Length != 0 {
 						cname = h.Name
 					}
@@ -733,7 +742,7 @@ func (r *Resolver) goLookupIPCNAMEOrder(ctx context.Context, network, name strin
 						}
 						break loop
 					}
-					addrs = append(addrs, IPAddr{IP: IP(aaaa.AAAA[:])})
+					addrs = append(addrs, net.IPAddr{IP: net.IP(aaaa.AAAA[:])})
 					if cname.Length == 0 && h.Name.Length != 0 {
 						cname = h.Name
 					}

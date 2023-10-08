@@ -4,7 +4,7 @@
 
 //go:build unix
 
-package net
+package adns
 
 import (
 	"errors"

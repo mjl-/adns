@@ -6,12 +6,13 @@
 
 // Read system DNS config from /etc/resolv.conf
 
-package net
+package adns
 
 import (
-	"internal/bytealg"
 	"net/netip"
 	"time"
+
+	"github.com/mjl-/adns/internal/bytealg"
 )
 
 // See resolv.conf(5) on a Linux machine.

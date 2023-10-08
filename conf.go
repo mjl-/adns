@@ -4,17 +4,17 @@
 
 //go:build !js
 
-package net
+package adns
 
 import (
 	"errors"
-	"internal/bytealg"
-	"internal/godebug"
 	"io/fs"
 	"os"
 	"runtime"
 	"sync"
 	"syscall"
+
+	"github.com/mjl-/adns/internal/bytealg"
 )
 
 // The net package's name resolution is rather complicated.
@@ -81,6 +81,10 @@ func systemConf() *conf {
 	confOnce.Do(initConfVal)
 	return confVal
 }
+
+var netGoBuildTag = true
+var netCgoBuildTag = false
+var cgoAvailable = false
 
 // initConfVal initializes confVal based on the environment
 // that will not change during program execution.
@@ -469,8 +473,6 @@ func (c *conf) lookupOrder(r *Resolver, hostname string) (ret hostLookupOrder, d
 	return fallbackOrder, dnsConf
 }
 
-var netdns = godebug.New("netdns")
-
 // goDebugNetDNS parses the value of the GODEBUG "netdns" value.
 // The netdns value can be of the form:
 //
@@ -484,24 +486,7 @@ var netdns = godebug.New("netdns")
 //
 // etc.
 func goDebugNetDNS() (dnsMode string, debugLevel int) {
-	goDebug := netdns.Value()
-	parsePart := func(s string) {
-		if s == "" {
-			return
-		}
-		if '0' <= s[0] && s[0] <= '9' {
-			debugLevel, _, _ = dtoi(s)
-		} else {
-			dnsMode = s
-		}
-	}
-	if i := bytealg.IndexByteString(goDebug, '+'); i != -1 {
-		parsePart(goDebug[:i])
-		parsePart(goDebug[i+1:])
-		return
-	}
-	parsePart(goDebug)
-	return
+	return "go", 0
 }
 
 // isLocalhost reports whether h should be considered a "localhost"

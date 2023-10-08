@@ -2,13 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package net
+package adns
 
 import (
+	"net"
 	"testing"
 )
 
-func checkDistribution(t *testing.T, data []*SRV, margin float64) {
+func checkDistribution(t *testing.T, data []*net.SRV, margin float64) {
 	sum := 0
 	for _, srv := range data {
 		sum += int(srv.Weight)
@@ -18,7 +19,7 @@ func checkDistribution(t *testing.T, data []*SRV, margin float64) {
 
 	count := 10000
 	for j := 0; j < count; j++ {
-		d := make([]*SRV, len(data))
+		d := make([]*net.SRV, len(data))
 		copy(d, data)
 		byPriorityWeight(d).shuffleByWeight()
 		key := d[0].Target
@@ -38,9 +39,9 @@ func checkDistribution(t *testing.T, data []*SRV, margin float64) {
 }
 
 func testUniformity(t *testing.T, size int, margin float64) {
-	data := make([]*SRV, size)
+	data := make([]*net.SRV, size)
 	for i := 0; i < size; i++ {
-		data[i] = &SRV{Target: string('a' + rune(i)), Weight: 1}
+		data[i] = &net.SRV{Target: string('a' + rune(i)), Weight: 1}
 	}
 	checkDistribution(t, data, margin)
 }
@@ -53,7 +54,7 @@ func TestDNSSRVUniformity(t *testing.T) {
 }
 
 func testWeighting(t *testing.T, margin float64) {
-	data := []*SRV{
+	data := []*net.SRV{
 		{Target: "a", Weight: 60},
 		{Target: "b", Weight: 30},
 		{Target: "c", Weight: 10},

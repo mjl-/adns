@@ -2,7 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package net
+package adns
 
 // parsePort parses service as a decimal integer and returns the
 // corresponding value as port. It is the caller's responsibility to
