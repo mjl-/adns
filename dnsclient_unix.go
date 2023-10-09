@@ -15,6 +15,7 @@
 package adns
 
 import (
+	"bytes"
 	"context"
 	cryptorand "crypto/rand"
 	"errors"
@@ -236,6 +237,45 @@ func checkHeader(p *dnsmessage.Parser, h dnsmessage.Header) error {
 		// the server is behaving incorrectly or
 		// having temporary trouble.
 		if h.RCode == dnsmessage.RCodeServerFailure {
+			// Look for Extended DNS Error (EDE), RFC 8914.
+
+			if p.SkipAllAnswers() != nil || p.SkipAllAuthorities() != nil {
+				return errServerTemporarilyMisbehaving
+			}
+
+			var haveOPT bool
+			for {
+				rh, err := p.AdditionalHeader()
+				if err == dnsmessage.ErrSectionDone {
+					break
+				} else if err != nil {
+					return errServerTemporarilyMisbehaving
+				}
+				if rh.Type != dnsmessage.TypeOPT {
+					p.SkipAdditional()
+					continue
+				}
+				// Only one OPT record is allowed. With multiple we MUST return an error. See RFC
+				// 6891, section 6.1.1, page 6, last paragraph.
+				if haveOPT {
+					return errInvalidDNSResponse
+				}
+				haveOPT = true
+				opt, err := p.OPTResource()
+				if err != nil {
+					return errInvalidDNSResponse
+				}
+				for _, o := range opt.Options {
+					if o.Code == 15 {
+						if len(o.Data) < 2 {
+							return errInvalidDNSResponse
+						}
+						infoCode := ErrorCode(uint16(o.Data[0])<<8 | uint16(o.Data[1]<<0))
+						extraText := string(bytes.TrimRight(o.Data[2:], "\u0000"))
+						return ExtendedError{infoCode, extraText}
+					}
+				}
+			}
 			return errServerTemporarilyMisbehaving
 		}
 		return errServerMisbehaving
@@ -308,12 +348,18 @@ func (r *Resolver) tryOneName(ctx context.Context, cfg *dnsConfig, name string, 
 
 			if err := checkHeader(&p, h); err != nil {
 				dnsErr := &DNSError{
-					Err:    err.Error(),
-					Name:   name,
-					Server: server,
+					Underlying: err,
+					Err:        err.Error(),
+					Name:       name,
+					Server:     server,
 				}
 				if err == errServerTemporarilyMisbehaving {
 					dnsErr.IsTemporary = true
+				} else if edeErr, isEDE := err.(ExtendedError); isEDE && edeErr.IsTemporary() {
+					dnsErr.IsTemporary = true
+				} else if isEDE {
+					// Something wrong with the zone, no point asking another server or retrying.
+					return p, server, result, dnsErr
 				}
 				if err == errNoSuchHost {
 					// The name does not exist, so trying
@@ -461,7 +507,8 @@ func (r *Resolver) lookup(ctx context.Context, name string, qtype dnsmessage.Typ
 		if err == nil {
 			break
 		}
-		if nerr, ok := err.(net.Error); ok && nerr.Temporary() && r.strictErrors() {
+		var edeErr ExtendedError
+		if nerr, ok := err.(net.Error); ok && nerr.Temporary() && r.strictErrors() || errors.As(err, &edeErr) && !edeErr.IsTemporary() {
 			// If we hit a temporary error with StrictErrors enabled,
 			// stop immediately instead of trying more names.
 			break

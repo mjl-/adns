@@ -73,12 +73,18 @@ func (e *timeoutError) Is(err error) bool {
 
 // DNSError represents a DNS lookup error.
 type DNSError struct {
+	Underlying  error  // Underlying error, could be an ExtendedError.
 	Err         string // description of the error
 	Name        string // name looked for
 	Server      string // server used
 	IsTimeout   bool   // if true, timed out; not all timeouts set this
 	IsTemporary bool   // if true, error is temporary; not all errors set this
 	IsNotFound  bool   // if true, host could not be found
+}
+
+// Unwrap returns the underlying error, which could be an ExtendedError.
+func (e *DNSError) Unwrap() error {
+	return e.Underlying
 }
 
 func (e *DNSError) Error() string {

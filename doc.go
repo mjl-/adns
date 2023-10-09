@@ -13,5 +13,8 @@ Modifications
   - Resolver are also trusted if all name servers have loopback IPs. Resolvers
     are still also trusted if /etc/resolv.conf has "trust-ad" in the "options".
   - New function LookupTLSA, to support DANE which uses DNS records of type TLSA.
+  - Support Extended DNS Errors (EDE) for details about DNSSEC errors.
+  - adns uses its own DNSError type, with an additional "Underlying error" field
+    and Unwrap function, so callers can check for the new ExtendedError type.
 */
 package adns

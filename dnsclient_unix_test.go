@@ -1333,6 +1333,11 @@ func TestStrictErrorsLookupIP(t *testing.T) {
 			} else {
 				wantErr = tt.wantLaxErr
 			}
+			if err != nil {
+				if dnsErr, ok := err.(*DNSError); ok {
+					dnsErr.Underlying = nil // For DeepEqual.
+				}
+			}
 			if !reflect.DeepEqual(err, wantErr) {
 				t.Errorf("#%d (%s) strict=%v: got err %#v; want %#v", i, tt.desc, strict, err, wantErr)
 			}
@@ -2821,5 +2826,50 @@ func TestLookupTLSA(t *testing.T) {
 		t.Errorf("lookup TLSA, got err %v", err)
 	} else if !reflect.DeepEqual(records, expRecords) {
 		t.Errorf("lookup TLSA, got records %v, expected %v", records, expRecords)
+	}
+}
+
+// Test we are propagating the EDE error for a lookup.
+func TestExtendedDNSError(t *testing.T) {
+	fake := fakeDNSServer{
+		rh: func(_, _ string, q dnsmessage.Message, _ time.Time) (dnsmessage.Message, error) {
+			r := dnsmessage.Message{
+				Header: dnsmessage.Header{
+					ID:       q.Header.ID,
+					Response: true,
+					RCode:    dnsmessage.RCodeServerFailure,
+				},
+				Questions: q.Questions,
+			}
+
+			// If EDNS0 was present, send an extended error.
+			if len(q.Additionals) == 1 && q.Additionals[0].Header.Type == dnsmessage.TypeOPT {
+				r.Additionals = []dnsmessage.Resource{
+					{
+						Header: dnsmessage.ResourceHeader{
+							Name:  dnsmessage.MustNewName("."),
+							Type:  dnsmessage.TypeOPT,
+							Class: q.Additionals[0].Header.Class,
+							TTL:   0,
+						},
+						Body: &dnsmessage.OPTResource{
+							Options: []dnsmessage.Option{
+								{
+									Code: 15,                               // EDE
+									Data: []byte("\u0000\u0017test\u0000"), // InfoCode 0x17/23 ErrNetworkError
+								},
+							},
+						},
+					},
+				}
+			}
+			return r, nil
+		},
+	}
+
+	var dnsErr ExtendedError
+	r := &Resolver{PreferGo: true, Dial: fake.DialContext}
+	if _, _, err := r.LookupTXT(context.Background(), "go.dev"); err == nil || !errors.Is(err, ErrNetworkError) || !errors.As(err, &dnsErr) || dnsErr.ExtraText != "test" {
+		t.Errorf("lookup, got err %v/%#v, expected ErrNetworkError with extra text \"test\"", err, err)
 	}
 }
