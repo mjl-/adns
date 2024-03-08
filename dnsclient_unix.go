@@ -29,6 +29,7 @@ import (
 
 	"golang.org/x/net/dns/dnsmessage"
 
+	"github.com/mjl-/adns/internal/bytealg"
 	"github.com/mjl-/adns/internal/itoa"
 )
 
@@ -583,7 +584,7 @@ func (conf *dnsConfig) nameList(name string) []string {
 		return []string{name}
 	}
 
-	hasNdots := count(name, '.') >= conf.ndots
+	hasNdots := bytealg.CountString(name, '.') >= conf.ndots
 	name += "."
 	l++
 
