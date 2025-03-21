@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -539,9 +540,7 @@ func avoidDNS(name string) bool {
 	if name == "" {
 		return true
 	}
-	if name[len(name)-1] == '.' {
-		name = name[:len(name)-1]
-	}
+	name = strings.TrimSuffix(name, ".")
 	return stringsHasSuffixFold(name, ".onion")
 }
 
