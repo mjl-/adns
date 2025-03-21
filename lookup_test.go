@@ -245,14 +245,10 @@ func TestLookupGmailTXT(t *testing.T) {
 		if len(txts) == 0 {
 			t.Error("got no record")
 		}
-		found := false
-		for _, txt := range txts {
-			if strings.Contains(txt, tt.txt) && (strings.HasSuffix(txt, tt.host) || strings.HasSuffix(txt, tt.host+".")) {
-				found = true
-				break
-			}
-		}
-		if !found {
+
+		if !slices.ContainsFunc(txts, func(txt string) bool {
+			return strings.Contains(txt, tt.txt) && (strings.HasSuffix(txt, tt.host) || strings.HasSuffix(txt, tt.host+"."))
+		}) {
 			t.Errorf("got %v; want a record containing %s, %s", txts, tt.txt, tt.host)
 		}
 	}
@@ -301,14 +297,7 @@ func TestLookupIPv6LinkLocalAddr(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	found := false
-	for _, addr := range addrs {
-		if addr == "fe80::1%lo0" {
-			found = true
-			break
-		}
-	}
-	if !found {
+	if !slices.Contains(addrs, "fe80::1%lo0") {
 		t.Skipf("not supported on %s", runtime.GOOS)
 	}
 	if _, _, err := LookupAddr("fe80::1%lo0"); err != nil {
