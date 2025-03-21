@@ -12,7 +12,6 @@ import (
 	"os"
 	"runtime"
 	"sync"
-	"syscall"
 
 	"github.com/mjl-/adns/internal/bytealg"
 )
@@ -143,7 +142,7 @@ func initConfVal() {
 	// prefer the cgo resolver.
 	// Note that LOCALDOMAIN can change behavior merely by being
 	// specified with the empty string.
-	_, localDomainDefined := syscall.Getenv("LOCALDOMAIN")
+	_, localDomainDefined := os.LookupEnv("LOCALDOMAIN")
 	if localDomainDefined || os.Getenv("RES_OPTIONS") != "" || os.Getenv("HOSTALIASES") != "" {
 		confVal.preferCgo = true
 		return
