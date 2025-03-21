@@ -1467,7 +1467,6 @@ func TestStrictErrorsLookupTXT(t *testing.T) {
 	const server = "192.0.2.53:53"
 	const searchX = "test.x.golang.org."
 	const searchY = "test.y.golang.org."
-	const txt = "Hello World"
 
 	fake := fakeDNSServer{rh: func(_, s string, q dnsmessage.Message, deadline time.Time) (dnsmessage.Message, error) {
 		t.Log(s, q)

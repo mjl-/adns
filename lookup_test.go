@@ -1215,7 +1215,8 @@ func TestWithUnexpiredValuesPreserved(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 
 	// Insert a value into it.
-	key, value := "key-1", 2
+	type Key string
+	key, value := Key("key-1"), 2
 	ctx = context.WithValue(ctx, key, value)
 
 	// Now use the "values preserving context" like

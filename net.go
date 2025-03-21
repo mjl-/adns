@@ -40,10 +40,6 @@ func mapErr(err error) error {
 	}
 }
 
-type timeout interface {
-	Timeout() bool
-}
-
 // Various errors contained in DNSError.
 var (
 	errNoSuchHost  = &notFoundError{"no such host"}
