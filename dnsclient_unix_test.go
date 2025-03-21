@@ -10,6 +10,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	"os"
 	"path"
@@ -432,7 +433,7 @@ func TestUpdateResolvConf(t *testing.T) {
 			wg.Wait()
 		}
 		servers := conf.servers()
-		if !reflect.DeepEqual(servers, tt.servers) {
+		if !slices.Equal(servers, tt.servers) {
 			t.Errorf("#%d: got %v; want %v", i, servers, tt.servers)
 			continue
 		}
@@ -1157,7 +1158,7 @@ func testRotate(t *testing.T, rotate bool, nameservers, wantServers []string) {
 		}
 	}
 
-	if !reflect.DeepEqual(usedServers, wantServers) {
+	if !slices.Equal(usedServers, wantServers) {
 		t.Errorf("rotate=%t got used servers:\n%v\nwant:\n%v", rotate, usedServers, wantServers)
 	}
 }
@@ -1436,7 +1437,7 @@ func TestStrictErrorsLookupIP(t *testing.T) {
 					wantIPs[ip] = struct{}{}
 				}
 			}
-			if !reflect.DeepEqual(gotIPs, wantIPs) {
+			if !maps.Equal(gotIPs, wantIPs) {
 				t.Errorf("#%d (%s) strict=%v: got ips %v; want %v", i, tt.desc, strict, gotIPs, wantIPs)
 			}
 		}
@@ -1943,7 +1944,7 @@ func TestPTRandNonPTR(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LookupAddr: %v", err)
 	}
-	if want := []string{"golang.org."}; !reflect.DeepEqual(names, want) {
+	if want := []string{"golang.org."}; !slices.Equal(names, want) {
 		t.Errorf("names = %q; want %q", names, want)
 	}
 }
@@ -2210,14 +2211,14 @@ func TestCVE202133195(t *testing.T) {
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
-				if !reflect.DeepEqual(records, expected) {
+				if !slices.Equal(records, expected) {
 					t.Error("Unexpected record set")
 				}
 				records, _, err = LookupAddr("192.0.2.42")
 				if err.Error() != expectedErr.Error() {
 					t.Fatalf("unexpected error: %s", err)
 				}
-				if !reflect.DeepEqual(records, expected) {
+				if !slices.Equal(records, expected) {
 					t.Error("Unexpected record set")
 				}
 			},
