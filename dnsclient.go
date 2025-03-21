@@ -5,9 +5,10 @@
 package adns
 
 import (
+	"cmp"
 	mathrand "math/rand"
 	"net"
-	"sort"
+	"slices"
 
 	"golang.org/x/net/dns/dnsmessage"
 
@@ -149,12 +150,6 @@ func absDomainName(s string) string {
 // byPriorityWeight sorts SRV records by ascending priority and weight.
 type byPriorityWeight []*net.SRV
 
-func (s byPriorityWeight) Len() int { return len(s) }
-func (s byPriorityWeight) Less(i, j int) bool {
-	return s[i].Priority < s[j].Priority || (s[i].Priority == s[j].Priority && s[i].Weight < s[j].Weight)
-}
-func (s byPriorityWeight) Swap(i, j int) { s[i], s[j] = s[j], s[i] }
-
 // shuffleByWeight shuffles SRV records by weight using the algorithm
 // described in RFC 2782.
 func (addrs byPriorityWeight) shuffleByWeight() {
@@ -181,7 +176,12 @@ func (addrs byPriorityWeight) shuffleByWeight() {
 
 // sort reorders SRV records as specified in RFC 2782.
 func (addrs byPriorityWeight) sort() {
-	sort.Sort(addrs)
+	slices.SortFunc(addrs, func(a, b *net.SRV) int {
+		if r := cmp.Compare(a.Priority, b.Priority); r != 0 {
+			return r
+		}
+		return cmp.Compare(a.Weight, b.Weight)
+	})
 	i := 0
 	for j := 1; j < len(addrs); j++ {
 		if addrs[i].Priority != addrs[j].Priority {
@@ -192,12 +192,8 @@ func (addrs byPriorityWeight) sort() {
 	addrs[i:].shuffleByWeight()
 }
 
-// byPref implements sort.Interface to sort MX records by preference
+// byPref sorts MX records by preference
 type byPref []*net.MX
-
-func (s byPref) Len() int           { return len(s) }
-func (s byPref) Less(i, j int) bool { return s[i].Pref < s[j].Pref }
-func (s byPref) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
 
 // sort reorders MX records as specified in RFC 5321.
 func (s byPref) sort() {
@@ -205,5 +201,7 @@ func (s byPref) sort() {
 		j := randIntn(i + 1)
 		s[i], s[j] = s[j], s[i]
 	}
-	sort.Sort(s)
+	slices.SortFunc(s, func(a, b *net.MX) int {
+		return cmp.Compare(a.Pref, b.Pref)
+	})
 }
