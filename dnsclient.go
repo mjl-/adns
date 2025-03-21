@@ -6,7 +6,7 @@ package adns
 
 import (
 	"cmp"
-	mathrand "math/rand"
+	mathrand "math/rand/v2"
 	"net"
 	"slices"
 
@@ -17,7 +17,7 @@ import (
 )
 
 func randInt() int {
-	return mathrand.Int()
+	return int(uint(mathrand.Uint64()) >> 1) // clear sign bit
 }
 
 func randIntn(n int) int {
