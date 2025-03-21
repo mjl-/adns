@@ -1508,19 +1508,3 @@ func TestLookupPortIPNetworkString(t *testing.T) {
 		}
 	})
 }
-
-func allResolvers(t *testing.T, f func(t *testing.T)) {
-	t.Run("default resolver", f)
-	t.Run("forced go resolver", func(t *testing.T) {
-		if fixup := forceGoDNS(); fixup != nil {
-			defer fixup()
-			f(t)
-		}
-	})
-	t.Run("forced cgo resolver", func(t *testing.T) {
-		if fixup := forceCgoDNS(); fixup != nil {
-			defer fixup()
-			f(t)
-		}
-	})
-}
