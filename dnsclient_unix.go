@@ -23,6 +23,7 @@ import (
 	"net"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -31,7 +32,6 @@ import (
 	"golang.org/x/net/dns/dnsmessage"
 
 	"github.com/mjl-/adns/internal/bytealg"
-	"github.com/mjl-/adns/internal/itoa"
 )
 
 const (
@@ -611,7 +611,7 @@ func (o hostLookupOrder) String() string {
 	if s, ok := lookupOrderName[o]; ok {
 		return s
 	}
-	return "hostLookupOrder=" + itoa.Itoa(int(o)) + "??"
+	return "hostLookupOrder=" + strconv.Itoa(int(o)) + "??"
 }
 
 func (r *Resolver) goLookupHostOrder(ctx context.Context, name string, order hostLookupOrder, conf *dnsConfig) (addrs []string, result Result, err error) {
