@@ -715,7 +715,7 @@ func (r *Resolver) goLookupIPCNAMEOrder(ctx context.Context, network, name strin
 		p      dnsmessage.Parser
 		server string
 		result Result
-		error
+		error  error
 	}
 
 	if conf == nil {
